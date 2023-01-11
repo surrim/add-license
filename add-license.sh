@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2015-2016 surrim
+# Copyright 2015-2022 surrim
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,59 +15,49 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-name=$1
-copyright=$2
-license=$3
-path=$4
-error=0
+NAME=$1
+COPYRIGHT=$2
+LICENSE=$3
+WORKING_DIRECTORY=$4
 
-DIR=$(dirname "$0")
-HEADERS_DIR="$DIR/headers"
-GPLv3_C="GPLv3.c"
-GPLv3_ECPP="GPLv3.ecpp"
+ADD_LICENSE_DIRECTORY=$(dirname "$0")
+TEMP_FILE="/tmp/add-license.$$"
 
-if [ "$name" == "" ]; then
-	echo "usage: $0 <name> <copyright> [license [path]]"
+if [ "$NAME" == "" ] || [ "$COPYRIGHT" == "" ]; then
+	echo "Usage: $0 NAME COPYRIGHT [LICENSE [WORKING_DIRECTORY]]"
+	echo "   Example: add-license.sh \"My new project\" \"2022 surrim\" gpl ."
 	exit 1
 fi
-if [ "$license" == "" ]; then
-	license="gpl"
+
+if [ "$LICENSE" == "" ]; then
+	LICENSE="gpl"
 fi
-if [ "$path" == "" ]; then
-	path="."
+LICENSE_DIRECTORY="$ADD_LICENSE_DIRECTORY/snippets/$LICENSE"
+if [ ! -e "$LICENSE_DIRECTORY" ]; then
+	echo "License \"$LICENSE\" not found"
+	exit 1
 fi
-case "$license" in
-	gpl|gplv3)
-		C=$GPLv3_C
-		ECPP=$GPLv3_ECPP
-		;;
-	*)
-		echo "usage: $0 <name> <copyright> [license [path]]"
-		exit 1
-esac
-for i in $C $ECPP; do
-	sed "s/APP_COPYRIGHT/$copyright/g" "$HEADERS_DIR/$i" | sed "s/APP_NAME/$name/g" > "/tmp/$i"
-done
-find -L "$path" -type f -regex ".+\.\(h\|c\|cpp\|ecpp\)$" | while read i; do
-	if ! grep -q Copyright "$i"
-	then
-		ext=${i##*\.}
-		case "$ext" in
-			c|cpp|h)
-				file=$C
-				;;
-			ecpp)
-				file=$ECPP
-				;;
-			*)
-				echo "no license for $i ($ext)"
-				error=1
-		esac
-		echo "$i"
-		cat "/tmp/$file" "$i" > "$i.new" && mv "$i.new" "$i"
+
+if [ "$WORKING_DIRECTORY" == "" ]; then
+	WORKING_DIRECTORY="."
+fi
+if [ ! -e "$WORKING_DIRECTORY" ]; then
+	echo "Directory \"$WORKING_DIRECTORY\" not found"
+	exit 1
+fi
+
+cp "$LICENSE_DIRECTORY/LICENSE" "$WORKING_DIRECTORY"
+find "$WORKING_DIRECTORY" -type f -regex "^.+\..+$" | while read FILE; do
+	if ! grep -q Copyright "$FILE"; then
+		FILE_EXT=${FILE##*\.}
+		TEMPLATE="$LICENSE_DIRECTORY/template.$FILE_EXT"
+		if [ -e "$TEMPLATE" ]; then
+			echo "$FILE"
+			sed "$TEMPLATE" -E \
+				-e "s/APP_COPYRIGHT/$COPYRIGHT/g" \
+				-e "s/APP_NAME/$NAME/g" > "$TEMP_FILE"
+			cat "$FILE" >> "$TEMP_FILE"
+			mv "$TEMP_FILE" "$FILE"
+		fi
 	fi
 done
-for i in $C $ECPP; do
-	rm "/tmp/$i"
-done
-exit $error
